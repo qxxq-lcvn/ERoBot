@@ -1,16 +1,29 @@
 import os
 import sqlite3
-from datetime import datetime
-from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
 
-TOKEN = os.getenv("BOT_TOKEN")
+from telegram import Update
+from telegram.ext import (
+    ApplicationBuilder,
+    ContextTypes,
+    MessageHandler,
+    CommandHandler,
+    filters,
+)
 
-if not TOKEN:
-    raise ValueError("BOT_TOKEN is not set")
+# ======================
+# CONFIG
+# ======================
+TOKEN = os.getenv("BOT_TOKEN")  # Railway Environment Variable
+TIMEZONE = ZoneInfo("Asia/Phnom_Penh")
 
-# Database
+# ======================
+# DATABASE SETUP
+# ======================
 conn = sqlite3.connect("engagement.db", check_same_thread=False)
 cursor = conn.cursor()
+
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS messages (
     user_id INTEGER,
@@ -18,13 +31,49 @@ CREATE TABLE IF NOT EXISTS messages (
     timestamp TEXT
 )
 """)
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS admins (
+    user_id INTEGER PRIMARY KEY,
+    name TEXT
+)
+""")
+
 conn.commit()
 
-# Track messages
-async def track_message(update, context):
+# ======================
+# UTIL FUNCTIONS
+# ======================
+def is_weekend():
+    return datetime.now(TIMEZONE).weekday() >= 5  # Sat=5, Sun=6
+
+# ======================
+# HANDLERS
+# ======================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     name = f"{user.first_name} {user.last_name or ''}".strip()
-    timestamp = datetime.now().isoformat()
+
+    cursor.execute(
+        "INSERT OR IGNORE INTO admins VALUES (?, ?)",
+        (user.id, name)
+    )
+    conn.commit()
+
+    await update.message.reply_text(
+        "✅ You are registered to receive weekend engagement summaries."
+    )
+
+async def track_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_weekend():
+        return
+
+    if not update.effective_user:
+        return
+
+    user = update.effective_user
+    name = f"{user.first_name} {user.last_name or ''}".strip()
+    timestamp = datetime.now(TIMEZONE).isoformat()
 
     cursor.execute(
         "INSERT INTO messages VALUES (?, ?, ?)",
@@ -32,37 +81,51 @@ async def track_message(update, context):
     )
     conn.commit()
 
-# /count command
-async def count_messages(update, context):
-    try:
-        start, end = context.args
+async def weekend_summary(context: ContextTypes.DEFAULT_TYPE):
+    cursor.execute("""
+    SELECT name, COUNT(*)
+    FROM messages
+    WHERE timestamp >= datetime('now', '-2 days')
+    GROUP BY name
+    ORDER BY COUNT(*) DESC
+    """)
 
-        cursor.execute("""
-        SELECT name, COUNT(*)
-        FROM messages
-        WHERE timestamp BETWEEN ? AND ?
-        GROUP BY name
-        """, (start, end))
+    rows = cursor.fetchall()
 
-        rows = cursor.fetchall()
-        if not rows:
-            await update.message.reply_text("No data found.")
-            return
-
-        msg = "📊 Message Count:\n"
+    if not rows:
+        message = "📊 Weekend Engagement Summary\n\nNo messages recorded."
+    else:
+        message = "📊 Weekend Engagement Summary\n\n"
         for name, count in rows:
-            msg += f"- {name}: {count}\n"
+            message += f"- {name}: {count}\n"
 
-        await update.message.reply_text(msg)
+    cursor.execute("SELECT user_id FROM admins")
+    admins = cursor.fetchall()
 
-    except Exception:
-        await update.message.reply_text(
-            "Usage: /count YYYY-MM-DD YYYY-MM-DD"
+    for (admin_id,) in admins:
+        await context.bot.send_message(
+            chat_id=admin_id,
+            text=message
         )
 
-# App
-app = ApplicationBuilder().token(TOKEN).build()
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, track_message))
-app.add_handler(CommandHandler("count", count_messages))
+# ======================
+# MAIN APP
+# ======================
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
 
-app.run_polling()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, track_message))
+
+    # Sunday 6:00 PM Cambodia Time
+    app.job_queue.run_daily(
+        weekend_summary,
+        time=time(hour=18, minute=0, tzinfo=TIMEZONE),
+        days=(6,)
+    )
+
+    print("🤖 Bot is running...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
