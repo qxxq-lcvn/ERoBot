@@ -81,6 +81,25 @@ async def track_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     conn.commit()
 
+async def check_counts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cursor.execute("""
+    SELECT name, COUNT(*)
+    FROM messages
+    WHERE timestamp >= datetime('now', '-2 days')
+    GROUP BY name
+    ORDER BY COUNT(*) DESC
+    """)
+
+    rows = cursor.fetchall()
+    if not rows:
+        message = "📊 No messages recorded yet."
+    else:
+        message = "📊 Current Engagement Count:\n\n"
+        for name, count in rows:
+            message += f"- {name}: {count}\n"
+
+    await update.message.reply_text(message)
+
 async def weekend_summary(context: ContextTypes.DEFAULT_TYPE):
     cursor.execute("""
     SELECT name, COUNT(*)
@@ -116,6 +135,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, track_message))
+    app.add_handler(CommandHandler("count", check_counts))
 
     # Sunday 6:00 PM Cambodia Time
     app.job_queue.run_daily(
