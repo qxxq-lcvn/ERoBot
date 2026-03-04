@@ -1,3 +1,6 @@
+"""
+ERobot Project
+"""
 import os
 import sqlite3
 from datetime import datetime, time
@@ -104,7 +107,7 @@ async def check_counts(update: Update, _context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(message)
 
-async def weekend_summary(_context: ContextTypes.DEFAULT_TYPE):
+async def weekend_summary(context: ContextTypes.DEFAULT_TYPE):
     """ERobot Bot"""
     cursor.execute("""
     SELECT name, COUNT(*)

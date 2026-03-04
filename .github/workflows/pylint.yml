@@ -18,9 +18,9 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install pylint
-    - name: Installing telegram bot
+    - name: Installing telegram bot and zoneinfo
       run: |
-        pip install python-telegram-bot[job-queue]
+        pip install python-telegram-bot[job-queue] zoneinfo
     - name: Analysing the code with pylint
       run: |
         pylint $(git ls-files '*.py')
