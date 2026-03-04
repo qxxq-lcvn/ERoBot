@@ -45,12 +45,14 @@ conn.commit()
 # UTIL FUNCTIONS
 # ======================
 def is_weekend():
+    """ERobot Bot"""
     return datetime.now(TIMEZONE).weekday() >= 5  # Sat=5, Sun=6
 
 # ======================
 # HANDLERS
 # ======================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ERobot Bot"""
     user = update.effective_user
     name = f"{user.first_name} {user.last_name or ''}".strip()
 
@@ -65,6 +67,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def track_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ERobot Bot"""
     if not is_weekend():
         return
 
@@ -82,6 +85,7 @@ async def track_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.commit()
 
 async def check_counts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ERobot Bot"""
     cursor.execute("""
     SELECT name, COUNT(*)
     FROM messages
@@ -101,6 +105,7 @@ async def check_counts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(message)
 
 async def weekend_summary(context: ContextTypes.DEFAULT_TYPE):
+    """ERobot Bot"""
     cursor.execute("""
     SELECT name, COUNT(*)
     FROM messages
@@ -131,6 +136,7 @@ async def weekend_summary(context: ContextTypes.DEFAULT_TYPE):
 # MAIN APP
 # ======================
 def main():
+    """ERobot Bot"""
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
